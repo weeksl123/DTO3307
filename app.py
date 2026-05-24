@@ -206,7 +206,7 @@ def create_half_donut_chart(Title, Value):
 ####################### Routes #######################
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    #if session['logged_in']:
+    if session.get('logged_in', False):
         if request.method == 'POST':
             selected_child = request.form.get('child')
             amount = int(request.form.get('amount'))
@@ -235,7 +235,7 @@ def index():
         chart3 = create_half_donut_chart('Tia', 25)
 
         return render_template('index.html', chart1=chart1, chart2=chart2, chart3=chart3)
-    #else:
+    else:
         return render_template('index.html')
 
 @app.route('/sign_in', methods=['GET', 'POST'])
