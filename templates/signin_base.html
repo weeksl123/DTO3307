@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, inital-scale=1.0">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css')}}">
+        <link rel="script" href="{{ url_for('static', filename='js/script.js') }}">
+        {% block head %}{% endblock %}
+    </head>
+    <body>
+        {% block heading %}{% endblock %}
+        {% with message = get_flashed_messages() %}
+            {% if message %}
+                {% for error in get_flashed_messages(category_filter=["Error"]) %}
+                    <p style="color:red;">{{ error }}</p>
+                {% endfor %}
+                {% for success in get_flashed_messages(category_filter=["Success"]) %}
+                    <p style="color:green;">{{ success }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <form id="signin_form" method="post">
+            <label for="username">Username:</label><br>
+            <input autofocus type="text" id="username" name="username" required><br><br>
+            {% block form %}{% endblock %}
+            <label for="password">Password:</label><br>
+            <input type="password" id="password" name="password" required><br><br>
+            {% block form1 %}{% endblock %}
+            {% block switch %}{% endblock %}
+        </form>
+    </body>
+</html>

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block head %}
+    <title>Dashboard</title>
+{% endblock %}
+
+{% block content %}
+    <h1>Welcome to your Dashboard!</h1>
+    {% if session['privilege'] == 1 %}
+        <p>You are logged in as a parent.</p>
+        <div class="dashboard">
+            <div id="charts">
+                <div class="chart">
+                    <embed src="{{ chart1.render_data_uri() | safe }}" type="image/svg+xml"></embed>
+                </div>
+                <div class="chart">
+                    <embed src="{{ chart2.render_data_uri() | safe }}" type="image/svg+xml"></embed>
+                </div>
+                <div class="chart">
+                    <embed src="{{ chart3.render_data_uri() | safe }}" type="image/svg+xml"></embed>
+                </div>
+            </div>
+            <div id="children">
+                <h2>Children</h2>
+                <ul>
+                    {% if session['children'] %}
+                        {% for child_name in session['children_name'] %}
+                            <li>
+                                <h3>
+                                    {{ child_name }}
+                                    <form method="POST" action="{{ url_for('remove_child', child_id=session['children'][loop.index0]) }}" style="display:inline;">
+                                        <button class="removeChildBtn" type="submit">                                       
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-dash-circle" viewBox="0 0 16 16">
+                                                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+                                                <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8"/>
+                                            </svg>
+                                        </button>
+                                    </form>
+                                </h3>
+                            </li>
+                        {% endfor %}
+                    {% else %}
+                        <p>No children added yet.</p>
+                    {% endif %}
+                    <button id="addChildBtn">
+                        <a href="{{ url_for('add_child') }}">Add Child 
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-circle" viewBox="0 0 16 16">
+                                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+                                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/>
+                            </svg>
+                        </a>
+                    </button>
+                </ul>
+            </div>
+        </div>
+        <div class="dashboard">
+            <div id="change-spent">
+                <form>
+                    <label for="child">Select Child:</label><br>
+                    <select id="child" name="child" required>
+                        {% if session['children'] %}
+                            {% for child_name in session['children_name'] %}
+                                <option value="{{ child_name }}">{{ child_name }}</option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="" disabled>No children available</option>
+                        {% endif %}
+                    </select><br><br>
+                    <label for="amount">Amount to Deduct:</label><br>
+                    <input type="number" id="amount" name="amount" required min="0"><br><br>
+                    <button type="submit">Update</button>
+                </form>
+            </div>
+        </div>
+    {% elif session['privilege'] == 0 %}
+        <p>You are logged in as a child.</p>
+    {% else %}
+        <p>You are not logged in.</p>
+    {% endif %}
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+{% endblock %}

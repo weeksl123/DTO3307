@@ -1,0 +1,16 @@
+{% extends "signin_base.html" %}
+
+{% block head %}
+    <title>Add Child</title>
+{% endblock %}
+
+{% block heading%}
+    <button id="back-button" onclick="history.back()">Back</button>
+    <h2>Add Child</h2>
+{% endblock %}
+
+{% block form1 %}
+    <label for="con-password">Confirm Password:</label><br>
+    <input type="password" id="con-password" name="con-password" required><br><br>
+    <button type="submit">Add Child</button>
+{% endblock %}

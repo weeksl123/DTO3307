@@ -1,0 +1,161 @@
+/*************Styles Main Content*****************/
+html, body {
+	margin: 0;
+	padding: 0;
+	border: none;
+	background: #f1f1f0;
+	height: 100%;
+	width: 100%;
+	overflow-x: hidden;
+}
+
+body {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+}
+
+main {
+	flex: 1;
+}
+
+main h1, h2, h3 {
+	text-align: center;
+	color: #62067c;
+}
+
+/*****************Styles Nav*****************/
+
+nav {
+	overflow: hidden;
+	background-color: #333;
+	border: #333 solid 5px;
+	border-radius: 2px;
+	position: sticky;
+	top: 0;
+}
+
+nav a {
+	float: left;
+	color: #f2f2f2;
+	text-align: center;
+	padding: 14px 16px;
+	text-decoration: none;
+	font-size: 17px;
+}
+
+#signin_button {
+	float: right;
+	color: white;
+	border: none;
+	padding: 10px 20px;
+	font-size: 16px;
+	cursor: pointer;
+	border-radius: 5px;
+}
+
+#logout_button {
+	float: right;
+	color: white;
+	border: none;
+	padding: 10px 20px;
+	font-size: 16px;
+	cursor: pointer;
+	border-radius: 5px;
+} 
+
+/******Styles Signin/Signup pages******/
+
+#signin_form {
+	color: #62067c;
+	margin: auto;
+}
+
+input[type="text"], input[type="email"], input[type="password"] {
+	width: 100%;
+	margin: auto;
+	margin-bottom: 20px;
+	padding: 12px;
+	border: 1px solid #ccc;
+	border-radius: 3px;
+}
+
+input[type="submit"] {
+	width: 100%;
+	margin-bottom: 20px;
+	padding: 12px;
+	border: 1px solid #ccc;
+	border-radius: 3px;
+	background-color: white;
+}
+
+.invalid { color:red; }
+
+.valid { color:green; }
+
+#back-button {
+	display: inline;
+	width: 100px;
+	height: 40px;
+	background-color: #333;
+	border: #333 solid 1px;
+	border-radius: 5px;
+	color: #f2f2f2;
+	font-size: 16px;
+	cursor: pointer;
+}
+
+/*****************Styles Dashboard*****************/
+
+.dashboard {
+	display: flex;
+	margin: auto;
+}
+
+#charts {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	align-items: center;
+	justify-content: space-around;
+	flex: 1;
+	background-color: #FFFFFF;
+	border: 3px solid #eee;
+	border-radius: 8px;
+}
+
+.chart {
+	width: 100%;
+	background: #fdfdfd;
+	border-radius: 8px;
+	padding: 10px;
+}
+
+.chart embed {
+	width: 100%;
+	height: auto;
+}
+
+#children {
+	width: 15%;
+	background-color: #FFFFFF;
+	border: 3px solid #eee;
+	border-radius: 8px;
+}
+
+#children h3 {
+	text-align: left;
+	color: #62067c;
+}
+
+#children button {
+	background-color: #333;
+	border: #333 solid 1px;
+	border-radius: 5px;
+	color: #f2f2f2;
+}
+
+#children button a {
+	color: #f2f2f2;
+	text-decoration: none;
+	font-weight: bold;
+}
