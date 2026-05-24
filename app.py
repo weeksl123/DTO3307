@@ -3,10 +3,13 @@ from flask import Flask, render_template, request, redirect, url_for, g, session
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 import pygal
+from dotenv import load_dotenv
+import os
 
 ####################### Flask app setup #######################
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'HailstoneSecretKey'
+load_dotenv()
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'HailstoneSecretKey')  # Use a default value if SECRET_KEY is not set in .env)
 
 ####################### Database setup #######################
 DATABASE = './test.db'
