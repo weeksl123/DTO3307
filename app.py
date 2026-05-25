@@ -190,6 +190,13 @@ class User:
         cur = connect_db().cursor()
         cur.execute('DELETE FROM users WHERE id = ?', (child_id,))
 
+        # Update sqlite_sequence table to maintain correct IDs
+        cur.execute('SELECT MAX(id) FROM users')
+        max_id = cur.fetchone()[0]
+        if max_id is None:
+            max_id = 0
+        cur.execute('UPDATE sqlite_sequence SET seq = ? WHERE name = ?', (max_id, 'users'))
+
         if child_id in self.children:
             self.children.remove(child_id)
 
