@@ -31,22 +31,9 @@
         <main>
             {% block content %}{% endblock %}
         </main>
-        <script>
-            document.addEventListener('DOMContentLoaded', function () {
-                const flashes = document.querySelectorAll('.flash');
-                if (!flashes.length) return;
-                // Auto-hide after 4 seconds
-                setTimeout(function () {
-                    flashes.forEach(function (f) { f.classList.add('hide'); });
-                }, 4000);
-                // Remove from DOM after transition
-                flashes.forEach(function (f) {
-                    f.addEventListener('transitionend', function () {
-                        if (f.classList.contains('hide') && f.parentNode) f.parentNode.removeChild(f);
-                    });
-                });
-            });
-        </script>
+        <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+        {% block scripts %}{% endblock %}
+        <script src="{{ url_for('static', filename='js/script.js', v='2') }}"></script>
         <footer>
         <p>&copy; 2024 My Flask App</p>
     </footer>

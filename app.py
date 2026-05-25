@@ -29,6 +29,16 @@ def create_db():
         "spent"	INTEGER,
         PRIMARY KEY("id" AUTOINCREMENT)
         )''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS "transactions" (
+        "id" INTEGER NOT NULL,
+        "user_id" INTEGER NOT NULL,
+        "amount" INTEGER NOT NULL,
+        "description" TEXT,
+        "timestamp" DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY("id" AUTOINCREMENT),
+        FOREIGN KEY("user_id") REFERENCES "users"("id")
+    )''')
     conn.commit()
     conn.close()
 
@@ -212,10 +222,25 @@ class User:
 
         flash('Child account removed successfully!', 'success')
 
-    def update_balance(self, child_id, amount):
+    def update_balance(self, child_id, amount, description=None):
         cur = connect_db().cursor()
+        # Update user's balance and spent. `amount` can be negative to represent a reversal.
         cur.execute('UPDATE users SET balance = balance - ?, spent = spent + ? WHERE id = ?', (amount, amount, child_id))
+        # Insert transaction record (description may be NULL)
+        cur.execute('INSERT INTO transactions (user_id, amount, description) VALUES (?, ?, ?)', (child_id, amount, description))
         flash('Balance updated successfully!', 'success')
+
+    @staticmethod
+    def get_transactions(user_id):
+        cur = connect_db().cursor()
+        cur.execute('SELECT id, user_id, amount, description, timestamp FROM transactions WHERE user_id = ? ORDER BY timestamp DESC', (user_id,))
+        return cur.fetchall()
+
+    @staticmethod
+    def get_transaction_by_id(tx_id):
+        cur = connect_db().cursor()
+        cur.execute('SELECT id, user_id, amount, description, timestamp FROM transactions WHERE id = ?', (tx_id,))
+        return cur.fetchone()
 
 ####################### Chart setup #######################
 def create_half_donut_chart(title, spent_amount, total=300):
@@ -239,10 +264,12 @@ def create_half_donut_chart(title, spent_amount, total=300):
 @app.route('/', methods=['GET', 'POST'])
 def index():
     charts = []
+    transactions = []
 
     if session.get('logged_in', False):
         if request.method == 'POST':
             selected_child = request.form.get('child')
+            description = request.form.get('description')
             try:
                 amount = float(request.form.get('amount') or 0)
             except ValueError:
@@ -259,7 +286,7 @@ def index():
                         child_index = session['children'].index(child_id)
                         user = User.get_by_id(child_id)
                         if user:
-                            user.update_balance(child_id, amount)
+                            user.update_balance(child_id, amount, description=description)
                             session['children_balances'][child_index] -= amount
                             session['children_spent'][child_index] += amount
                             flash(f"Updated balance for {session['children_name'][child_index]} by ${amount}.", 'success')
@@ -286,12 +313,14 @@ def index():
                 if result:
                     balance, spent, username = result
                     charts.append(create_half_donut_chart(username, spent))
+                    # Load this child's transactions to display
+                    transactions = User.get_transactions(current_user.id)
                 else:
                     charts.append(create_half_donut_chart('Child', 0))
             else:
                 charts.append(create_half_donut_chart('Child', 0))
 
-    return render_template('index.html', charts=charts)
+    return render_template('index.html', charts=charts, transactions=transactions)
 
 @app.route('/sign_in', methods=['GET', 'POST'])
 def sign_in():
@@ -339,6 +368,72 @@ def remove_child(child_id):
     else:
         flash('You must be signed in to remove a child.', 'error')
     return redirect(url_for('index'))
+
+
+@app.route('/transactions/<int:child_id>', methods=['GET'])
+def transactions(child_id):
+    if not session.get('logged_in'):
+        flash('Not authorized to view transactions.', 'error')
+        return redirect(url_for('index'))
+
+    user_privilege = session.get('privilege')
+    if user_privilege == 1:
+        parent = User.get_by_id(session.get('user_id'))
+        if child_id not in parent.children:
+            flash('Child not found.', 'error')
+            return redirect(url_for('index'))
+    elif user_privilege == 0:
+        if child_id != session.get('user_id'):
+            flash('Not authorized to view another child\'s transactions.', 'error')
+            return redirect(url_for('index'))
+    else:
+        flash('Not authorized to view transactions.', 'error')
+        return redirect(url_for('index'))
+
+    txs = User.get_transactions(child_id)
+    child = User.get_by_id(child_id)
+    child_name = child.username if child else 'Unknown'
+    return render_template('transactions.html', transactions=txs, child_id=child_id, child_name=child_name)
+
+
+@app.route('/reverse_transaction/<int:tx_id>/<int:child_id>', methods=['POST'])
+def reverse_transaction(tx_id, child_id):
+    if session.get('privilege') != 1:
+        flash('Not authorized to reverse transactions.', 'error')
+        return redirect(url_for('index'))
+    parent = User.get_by_id(session.get('user_id'))
+    if child_id not in parent.children:
+        flash('Child not found.', 'error')
+        return redirect(url_for('index'))
+    tx = User.get_transaction_by_id(tx_id)
+    if not tx or tx[1] != child_id:
+        flash('Transaction not found.', 'error')
+        return redirect(url_for('transactions', child_id=child_id))
+    # Prevent double reversal by checking for a prior reversal with the same marker
+    reversal_description = f"Reversal of tx {tx_id}: {tx[3]}"
+    cur = connect_db().cursor()
+    cur.execute('SELECT id FROM transactions WHERE description = ? AND user_id = ?', (reversal_description, child_id))
+    if cur.fetchone():
+        flash('Transaction already reversed.', 'error')
+        return redirect(url_for('transactions', child_id=child_id))
+    amount = tx[2]
+    child_user = User.get_by_id(child_id)
+    if child_user:
+        # Use negative amount to add back to balance and reduce spent
+        child_user.update_balance(child_id, -amount, description=reversal_description)
+        flash('Transaction reversed successfully.', 'success')
+        # Update session balances/spent so parent dashboard charts reflect reversal immediately
+        if 'children' in session and child_id in session.get('children', []):
+            try:
+                idx = session['children'].index(child_id)
+                # amount is original tx amount; reversing should add it back to balance and subtract from spent
+                session['children_balances'][idx] = session['children_balances'][idx] + amount
+                session['children_spent'][idx] = session['children_spent'][idx] - amount
+            except Exception:
+                pass
+    else:
+        flash('Child user not found.', 'error')
+    return redirect(url_for('transactions', child_id=child_id))
 
 if __name__ == '__main__':
     app.run(debug=True)

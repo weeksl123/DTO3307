@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block head %}
+    <title>Transactions for {{ child_name }}</title>
+{% endblock %}
+
+{% block content %}
+    <h1>Transactions for {{ child_name }}</h1>
+    <a href="{{ url_for('index') }}">Back to Dashboard</a>
+    {% if transactions and transactions|length > 0 %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Amount</th>
+                    <th>Description</th>
+                    <th>Time</th>
+                    {%- if session.get('privilege') == 1 %}
+                        <th>Actions</th>
+                    {%- endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for tx in transactions %}
+                    <tr>
+                        <td>{{ tx[0] }}</td>
+                        <td>${{ '%.2f'|format(tx[2]) }}</td>
+                        <td>{{ tx[3] or '' }}</td>
+                        <td><span class="tx-ts" data-ts="{{ tx[4] }}">{{ tx[4] }}</span></td>
+                        <td>
+                            {% if session.get('privilege') == 1 %}
+                                <form method="POST" action="{{ url_for('reverse_transaction', tx_id=tx[0], child_id=child_id) }}" style="display:inline;">
+                                    <button type="submit">Reverse</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No transactions found for this child.</p>
+    {% endif %}
+{% endblock %}
