@@ -19,9 +19,34 @@
                     {% endif %}
             </nav>
         </header>
+        {% set messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flashes">
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
         <main>
             {% block content %}{% endblock %}
         </main>
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const flashes = document.querySelectorAll('.flash');
+                if (!flashes.length) return;
+                // Auto-hide after 4 seconds
+                setTimeout(function () {
+                    flashes.forEach(function (f) { f.classList.add('hide'); });
+                }, 4000);
+                // Remove from DOM after transition
+                flashes.forEach(function (f) {
+                    f.addEventListener('transitionend', function () {
+                        if (f.classList.contains('hide') && f.parentNode) f.parentNode.removeChild(f);
+                    });
+                });
+            });
+        </script>
         <footer>
         <p>&copy; 2024 My Flask App</p>
     </footer>

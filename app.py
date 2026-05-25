@@ -163,25 +163,46 @@ class User:
     def add_child(self, child_name, password, confirm_password):
         cur = connect_db().cursor()
         if self.privilege == 1:
-            if password == confirm_password:
-                hash = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
-                cur.execute('INSERT INTO users (username, email, password_hash, privilege, children, parent_id, balance, spent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', (child_name, self.email, hash, 0, None, self.id, 300, 0))
-                cur.execute('UPDATE users SET children = COALESCE(children, "") || ? WHERE id = ?', (',' + str(cur.lastrowid), self.id))
-                child_id = cur.lastrowid
-                self.children.append(child_id)
-                session['children_spent'].append(0)
-                flash('Child account added successfully!', 'success')
-                return render_template('index.html')
+            cur.execute('SELECT username FROM users WHERE username = ?', (child_name,))
+            if cur.fetchone():
+                flash('Child username already exists. Please choose a different username.', 'error')
+                return False
             else:
-                flash('Passwords do not match.', 'error')
+                if password == confirm_password:
+                    hash = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
+                    cur.execute('INSERT INTO users (username, email, password_hash, privilege, children, parent_id, balance, spent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', (child_name, self.email, hash, 0, None, self.id, 300, 0))
+                    child_id = cur.lastrowid
+                    cur.execute('UPDATE users SET children = COALESCE(children, "") || ? WHERE id = ?', (',' + str(child_id), self.id))
+                    self.children.append(child_id)
+                    session.setdefault('children', []).append(child_id)
+                    session.setdefault('children_name', []).append(child_name)
+                    session.setdefault('children_balances', []).append(300)
+                    session.setdefault('children_spent', []).append(0)
+                    flash('Child account added successfully!', 'success')
+                    return True
+                else:
+                    flash('Passwords do not match.', 'error')
         else:
             flash('Only parent accounts can add children.', 'error')
+        return False
     
     def remove_child(self, child_id):
         cur = connect_db().cursor()
         cur.execute('DELETE FROM users WHERE id = ?', (child_id,))
-        cur.execute("UPDATE sqlite_sequence SET seq = (SELECT MAX(id) FROM users) WHERE name = 'users'")
-        self.children.remove(child_id)
+
+        if child_id in self.children:
+            self.children.remove(child_id)
+
+        updated_children = ','.join(str(child) for child in self.children) if self.children else None
+        cur.execute('UPDATE users SET children = ? WHERE id = ?', (updated_children, self.id))
+
+        if 'children' in session and child_id in session['children']:
+            child_index = session['children'].index(child_id)
+            session['children'].pop(child_index)
+            session['children_name'].pop(child_index)
+            session['children_balances'].pop(child_index)
+            session['children_spent'].pop(child_index)
+
         flash('Child account removed successfully!', 'success')
 
     def update_balance(self, child_id, amount):
@@ -190,53 +211,80 @@ class User:
         flash('Balance updated successfully!', 'success')
 
 ####################### Chart setup #######################
-def create_half_donut_chart(Title, Value):
+def create_half_donut_chart(title, spent_amount, total=300):
+    remaining = total - spent_amount
+    if remaining < 0:
+        remaining = 0
+
     chart = pygal.Pie(
-        inner_radius=0.5, 
-        half_pie=True, 
-        style = pygal.style.Style(background='transparent'),
-        show_legend=False, 
+        inner_radius=0.5,
+        half_pie=True,
+        style=pygal.style.Style(background='transparent'),
+        show_legend=False,
         margin=10
     )
-    chart.title = Title
-    chart.add('Spent', Value)
-    chart.add('Remaining', 300 - Value)
+    chart.title = title
+    chart.add('Spent', spent_amount)
+    chart.add('Remaining', remaining)
     return chart
 
 ####################### Routes #######################
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    charts = []
+
     if session.get('logged_in', False):
         if request.method == 'POST':
             selected_child = request.form.get('child')
-            amount = int(request.form.get('amount'))
-            print("Selected Child:", selected_child)
+            try:
+                amount = float(request.form.get('amount') or 0)
+            except ValueError:
+                amount = 0
+            print("Selected Child (raw):", selected_child)
             print("Amount:", amount)
             if selected_child and amount > 0:
-                child_index = session['children_name'].index(selected_child)
-                child_id = session['children'][child_index]
-                user = User.get_by_id(child_id)
-                if user:
-                    user.update_balance(child_id, amount)
-                    session['children_balances'][child_index] -= amount
-                    session['children_spent'][child_index] += amount
-                    flash(f'Updated balance for {selected_child} by ${amount}.', 'success')
+                try:
+                    child_id = int(selected_child)
+                except ValueError:
+                    flash('Invalid child selection.', 'error')
                 else:
-                    flash('Child not found.', 'error')
+                    if 'children' in session and child_id in session['children']:
+                        child_index = session['children'].index(child_id)
+                        user = User.get_by_id(child_id)
+                        if user:
+                            user.update_balance(child_id, amount)
+                            session['children_balances'][child_index] -= amount
+                            session['children_spent'][child_index] += amount
+                            flash(f"Updated balance for {session['children_name'][child_index]} by ${amount}.", 'success')
+                        else:
+                            flash('Child not found.', 'error')
+                    else:
+                        flash('Child not found in session.', 'error')
             else:
                 flash('Please select a child and enter a valid amount.', 'error')
-        
-        chart1 = create_half_donut_chart(session['children_name'][0] if session['children_name'] else 'Child 1', session['children_spent'][0] if session['children_spent'] else 0)
-        chart2 = create_half_donut_chart(session['children_name'][1] if len(session['children_name']) > 1 else 'Child 2', session['children_spent'][1] if len(session['children_spent']) > 1 else 0)
-        #chart3 = create_half_donut_chart(session['children_name'][2] if len(session['children_name']) > 2 else 'Child 3', session['children_spent'][2] if len(session['children_spent']) > 2 else 0)
 
-        #chart1 = create_half_donut_chart('Nikau', 75)
-        #chart2 = create_half_donut_chart('Hana', 50)
-        chart3 = create_half_donut_chart('Tia', 25)
+        if session.get('privilege') == 1:
+            if session.get('children_name'):
+                for idx, child_name in enumerate(session.get('children_name', [])):
+                    spent = session.get('children_spent', [0] * len(session['children_name']))[idx] if idx < len(session.get('children_spent', [])) else 0
+                    charts.append(create_half_donut_chart(child_name, spent))
+            else:
+                charts.append(create_half_donut_chart('No Child', 0))
+        else:
+            current_user = User.get_by_id(session.get('user_id'))
+            if current_user:
+                cur = connect_db().cursor()
+                cur.execute('SELECT balance, spent, username FROM users WHERE id = ?', (current_user.id,))
+                result = cur.fetchone()
+                if result:
+                    balance, spent, username = result
+                    charts.append(create_half_donut_chart(username, spent))
+                else:
+                    charts.append(create_half_donut_chart('Child', 0))
+            else:
+                charts.append(create_half_donut_chart('Child', 0))
 
-        return render_template('index.html', chart1=chart1, chart2=chart2, chart3=chart3)
-    else:
-        return render_template('index.html')
+    return render_template('index.html', charts=charts)
 
 @app.route('/sign_in', methods=['GET', 'POST'])
 def sign_in():
@@ -270,7 +318,8 @@ def add_child():
     if request.method == 'POST':
         parent = User.get_by_id(session.get('user_id'))
         if parent:
-            parent.add_child(request.form.get('username'), request.form.get('password'), request.form.get('con-password'))
+            if parent.add_child(request.form.get('username'), request.form.get('password'), request.form.get('con-password')):
+                return redirect(url_for('index'))
         else:
             flash('You must be signed in to add a child.', 'error')
     return render_template('child_signup.html')

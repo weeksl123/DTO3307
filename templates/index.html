@@ -10,15 +10,11 @@
         <p>You are logged in as a parent.</p>
         <div class="dashboard">
             <div id="charts">
-                <div class="chart">
-                    <embed src="{{ chart1.render_data_uri() | safe }}" type="image/svg+xml"></embed>
-                </div>
-                <div class="chart">
-                    <embed src="{{ chart2.render_data_uri() | safe }}" type="image/svg+xml"></embed>
-                </div>
-                <div class="chart">
-                    <embed src="{{ chart3.render_data_uri() | safe }}" type="image/svg+xml"></embed>
-                </div>
+                {% for chart in charts %}
+                    <div class="chart">
+                        <embed src="{{ chart.render_data_uri() | safe }}" type="image/svg+xml"></embed>
+                    </div>
+                {% endfor %}
             </div>
             <div id="children">
                 <h2>Children</h2>
@@ -55,25 +51,34 @@
         </div>
         <div class="dashboard">
             <div id="change-spent">
-                <form>
+                <form method="POST" action="{{ url_for('index') }}">
                     <label for="child">Select Child:</label><br>
                     <select id="child" name="child" required>
                         {% if session['children'] %}
                             {% for child_name in session['children_name'] %}
-                                <option value="{{ child_name }}">{{ child_name }}</option>
+                                <option value="{{ session['children'][loop.index0] }}">{{ child_name }}</option>
                             {% endfor %}
                         {% else %}
                             <option value="" disabled>No children available</option>
                         {% endif %}
                     </select><br><br>
                     <label for="amount">Amount to Deduct:</label><br>
-                    <input type="number" id="amount" name="amount" required min="0"><br><br>
+                    <input type="number" step="0.01" inputmode="decimal" id="amount" name="amount" required min="0"><br><br>
                     <button type="submit">Update</button>
                 </form>
             </div>
         </div>
-    {% elif session['privilege'] == 0 %}
+    {% elif session.get('privilege') == 0 %}
         <p>You are logged in as a child.</p>
+        <div class="dashboard">
+            <div id="charts">
+                {% for chart in charts %}
+                    <div class="chart">
+                        <embed src="{{ chart.render_data_uri() | safe }}" type="image/svg+xml"></embed>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
     {% else %}
         <p>You are not logged in.</p>
     {% endif %}

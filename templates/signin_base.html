@@ -9,16 +9,24 @@
     </head>
     <body>
         {% block heading %}{% endblock %}
-        {% with message = get_flashed_messages() %}
-            {% if message %}
-                {% for error in get_flashed_messages(category_filter=["Error"]) %}
-                    <p style="color:red;">{{ error }}</p>
+        {% set messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flashes">
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
                 {% endfor %}
-                {% for success in get_flashed_messages(category_filter=["Success"]) %}
-                    <p style="color:green;">{{ success }}</p>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+            </div>
+        {% endif %}
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const flashes = document.querySelectorAll('.flash');
+                if (!flashes.length) return;
+                setTimeout(function () { flashes.forEach(function (f) { f.classList.add('hide'); }); }, 4000);
+                flashes.forEach(function (f) {
+                    f.addEventListener('transitionend', function () { if (f.classList.contains('hide') && f.parentNode) f.parentNode.removeChild(f); });
+                });
+            });
+        </script>
         <form id="signin_form" method="post">
             <label for="username">Username:</label><br>
             <input autofocus type="text" id="username" name="username" required><br><br>
