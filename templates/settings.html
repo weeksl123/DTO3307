@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block head %}
+    <title>Account Settings</title>
+{% endblock %}
+
+{% block content %}
+    <h1>Account Settings</h1>
+    
+    <div class="settings-container">
+        <!-- Dark Mode Toggle -->
+        <div class="settings-section">
+            <h2>Appearance</h2>
+            <label for="dark-mode-toggle">Dark Mode:</label>
+            <input type="checkbox" id="dark-mode-toggle" name="dark-mode">
+            <p><small>Toggle dark mode on/off</small></p>
+        </div>
+
+        <!-- Change Password Section -->
+        <div class="settings-section">
+            <h2>Change Password</h2>
+            <form method="POST" action="{{ url_for('update_settings') }}">
+                <input type="hidden" name="change_password" value="1">
+                
+                <label for="old-password">Current Password:</label><br>
+                <input type="password" id="old-password" name="old_password" required><br><br>
+                
+                <label for="new-password">New Password:</label><br>
+                <input type="password" id="new-password" name="new_password" required><br><br>
+                
+                <label for="confirm-new-password">Confirm New Password:</label><br>
+                <input type="password" id="confirm-new-password" name="confirm_new_password" required><br><br>
+                
+                <button type="submit">Update Password</button>
+            </form>
+        </div>
+
+        <!-- Parent-Only Settings -->
+        {% if session.get('privilege') == 1 %}
+            <!-- Update Child Allowances -->
+            <div class="settings-section">
+                <h2>Child Annual Allowances</h2>
+                {% if children_info %}
+                    {% for child in children_info %}
+                        <form method="POST" action="{{ url_for('update_settings') }}" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+                            <input type="hidden" name="update_allowance" value="1">
+                            <input type="hidden" name="child_id" value="{{ child.id }}">
+                            
+                            <label><strong>{{ child.username }}</strong></label><br>
+                            <p><strong>Current Annual Balance: ${{ '%.2f'|format(child.annual_balance or 300) }}</strong></p>
+                            <label for="allowance-{{ child.id }}">New Annual Allowance:</label><br>
+                            <input type="number" step="1" min="0" id="allowance-{{ child.id }}" name="allowance" value="{{ child.annual_balance or 300 }}" required><br><br>
+                            
+                            <button type="submit">Update Allowance</button>
+                        </form>
+                    {% endfor %}
+                {% else %}
+                    <p>No children added yet.</p>
+                {% endif %}
+            </div>
+
+            <!-- Change Child Passwords -->
+            <div class="settings-section">
+                <h2>Child Passwords</h2>
+                {% if children_info %}
+                    {% for child in children_info %}
+                        <form method="POST" action="{{ url_for('update_settings') }}" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+                            <input type="hidden" name="change_child_password" value="1">
+                            <input type="hidden" name="child_id_pwd" value="{{ child.id }}">
+                            
+                            <label><strong>{{ child.username }}</strong> - Change Password</label><br>
+                            <label for="child-password-{{ child.id }}">New Password:</label><br>
+                            <input type="password" id="child-password-{{ child.id }}" name="child_new_password" required><br><br>
+                            
+                            <label for="child-confirm-{{ child.id }}">Confirm Password:</label><br>
+                            <input type="password" id="child-confirm-{{ child.id }}" name="child_confirm_password" required><br><br>
+                            
+                            <button type="submit">Update Password</button>
+                        </form>
+                    {% endfor %}
+                {% else %}
+                    <p>No children added yet.</p>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        <!-- Back to Dashboard -->
+        <div class="settings-section">
+            <a href="{{ url_for('index') }}" style="display: inline-block; padding: 10px 20px; background-color: #333; color: white; text-decoration: none; border-radius: 5px;">Back to Dashboard</a>
+        </div>
+    </div>
+{% endblock %}

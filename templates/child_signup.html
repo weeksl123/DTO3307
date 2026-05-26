@@ -15,6 +15,8 @@
 {% endblock %}
 
 {% block form1 %}
+    <label for="annual-balance">Annual Balance:</label><br>
+    <input type="number" step="1" min="0" id="annual-balance" name="annual_balance" value="0" required><br><br>
     <label for="con-password">Confirm Password:</label><br>
     <input type="password" id="con-password" name="con-password" required><br><br>
     <button type="submit">Add Child</button>

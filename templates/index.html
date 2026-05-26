@@ -19,12 +19,12 @@
             <div id="children">
                 <h2>Children</h2>
                 <ul>
-                    {% if session['children'] %}
-                        {% for child_name in session['children_name'] %}
+                    {% if children_status %}
+                        {% for child in children_status %}
                             <li>
                                 <h3>
-                                    {{ child_name }}
-                                    <form method="POST" action="{{ url_for('remove_child', child_id=session['children'][loop.index0]) }}" style="display:inline;">
+                                    {{ child.name }}
+                                    <form method="POST" action="{{ url_for('remove_child', child_id=child.id) }}" style="display:inline;">
                                         <button class="removeChildBtn" type="submit">                                       
                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-dash-circle" viewBox="0 0 16 16">
                                                 <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
@@ -32,8 +32,15 @@
                                             </svg>
                                         </button>
                                     </form>
-                                        <a class="txLink" href="{{ url_for('transactions', child_id=session['children'][loop.index0]) }}">Transactions</a>
+                                        <a class="txLink" href="{{ url_for('transactions', child_id=child.id) }}">Transactions</a>
                                 </h3>
+                                <p>Remaining allowance: ${{ '%.2f'|format(child.balance) }} — 
+                                    {% if child.on_track %}
+                                        On track for the bonus
+                                    {% else %}
+                                        Not on track for the bonus
+                                    {% endif %}
+                                </p>
                             </li>
                         {% endfor %}
                     {% else %}
@@ -83,6 +90,13 @@
             </div>
             <div id="children">
                 <h2>Your Transactions</h2>
+                <p>Remaining allowance: ${{ '%.2f'|format(child_balance) }} — 
+                    {% if child_bonus_on_track %}
+                        You are on track for the bonus!
+                    {% else %}
+                        You are not on track for the bonus yet.
+                    {% endif %}
+                </p>
                 {% if transactions and transactions|length > 0 %}
                     <ul class="tx-list">
                         {% for tx in transactions %}

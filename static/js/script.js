@@ -38,3 +38,29 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   });
 });
+
+// Dark Mode Toggle
+document.addEventListener('DOMContentLoaded', function() {
+  const darkModeToggle = document.getElementById('dark-mode-toggle');
+  
+  if (darkModeToggle) {
+    // Check if dark mode was previously set
+    const isDarkMode = localStorage.getItem('darkMode') === 'true';
+    darkModeToggle.checked = isDarkMode;
+    
+    if (isDarkMode) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+    
+    // Toggle dark mode
+    darkModeToggle.addEventListener('change', function() {
+      if (this.checked) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('darkMode', 'true');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('darkMode', 'false');
+      }
+    });
+  }
+});

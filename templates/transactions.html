@@ -27,13 +27,13 @@
                         <td>${{ '%.2f'|format(tx[2]) }}</td>
                         <td>{{ tx[3] or '' }}</td>
                         <td><span class="tx-ts" data-ts="{{ tx[4] }}">{{ tx[4] }}</span></td>
-                        <td>
-                            {% if session.get('privilege') == 1 %}
+                        {% if session.get('privilege') == 1 %}
+                            <td>
                                 <form method="POST" action="{{ url_for('reverse_transaction', tx_id=tx[0], child_id=child_id) }}" style="display:inline;">
                                     <button type="submit">Reverse</button>
                                 </form>
-                            {% endif %}
-                        </td>
+                            </td>
+                        {% endif %}
                     </tr>
                 {% endfor %}
             </tbody>

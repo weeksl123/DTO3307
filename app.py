@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import pygal
 from dotenv import load_dotenv
 import os
+import datetime
 
 ####################### Flask app setup #######################
 app = Flask(__name__)
@@ -40,9 +41,35 @@ def create_db():
         FOREIGN KEY("user_id") REFERENCES "users"("id")
     )''')
     conn.commit()
+    c.execute('PRAGMA table_info(users)')
+    existing_columns = [row[1] for row in c.fetchall()]
+    if 'annual_balance' not in existing_columns:
+        c.execute('ALTER TABLE users ADD COLUMN annual_balance INTEGER')
+        conn.commit()
     conn.close()
 
 create_db()
+
+def should_reset_balances():
+    now = datetime.datetime.now()
+    # Reset yearly at midnight on January 1 (commented out for testing):
+    # if now.month == 1 and now.day == 1 and now.hour == 0 and now.minute == 0:
+    #     return True
+    # Reset at lunch each day for testing purposes:
+    return now.hour == 12 and now.minute == 0
+
+
+def reset_balances_if_due():
+    if should_reset_balances():
+        cur = connect_db().cursor()
+        cur.execute('UPDATE users SET balance = COALESCE(annual_balance, 300), spent = 0 WHERE privilege = 0')
+        flash('Balances reset for testing purposes.', 'info')
+
+
+@app.before_request
+def before_request():
+    reset_balances_if_due()
+
 
 def connect_db():
     db = getattr(g, '_database', None)
@@ -170,7 +197,7 @@ class User:
         session.pop('children_spent', None)
         session['logged_in'] = False
 
-    def add_child(self, child_name, password, confirm_password):
+    def add_child(self, child_name, password, confirm_password, annual_balance=300):
         cur = connect_db().cursor()
         if self.privilege == 1:
             cur.execute('SELECT username FROM users WHERE username = ?', (child_name,))
@@ -180,13 +207,13 @@ class User:
             else:
                 if password == confirm_password:
                     hash = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
-                    cur.execute('INSERT INTO users (username, email, password_hash, privilege, children, parent_id, balance, spent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', (child_name, self.email, hash, 0, None, self.id, 300, 0))
+                    cur.execute('INSERT INTO users (username, email, password_hash, privilege, children, parent_id, balance, spent, annual_balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', (child_name, self.email, hash, 0, None, self.id, annual_balance, 0, annual_balance))
                     child_id = cur.lastrowid
                     cur.execute('UPDATE users SET children = COALESCE(children, "") || ? WHERE id = ?', (',' + str(child_id), self.id))
                     self.children.append(child_id)
                     session.setdefault('children', []).append(child_id)
                     session.setdefault('children_name', []).append(child_name)
-                    session.setdefault('children_balances', []).append(300)
+                    session.setdefault('children_balances', []).append(annual_balance)
                     session.setdefault('children_spent', []).append(0)
                     flash('Child account added successfully!', 'success')
                     return True
@@ -242,6 +269,51 @@ class User:
         cur.execute('SELECT id, user_id, amount, description, timestamp FROM transactions WHERE id = ?', (tx_id,))
         return cur.fetchone()
 
+    def change_password(self, old_password, new_password, confirm_password):
+        """Change user password. Returns (success, message)."""
+        if new_password != confirm_password:
+            return False, "New passwords do not match."
+        
+        cur = connect_db().cursor()
+        cur.execute('SELECT password_hash FROM users WHERE id = ?', (self.id,))
+        result = cur.fetchone()
+        
+        if not result or not check_password_hash(result[0], old_password):
+            return False, "Current password is incorrect."
+        
+        new_hash = generate_password_hash(new_password, method='pbkdf2:sha256', salt_length=16)
+        cur.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_hash, self.id))
+        return True, "Password changed successfully!"
+
+    def update_child_allowance(self, child_id, new_allowance):
+        """Update a child's annual allowance."""
+        if child_id not in self.children:
+            return False, "Child not found."
+        
+        try:
+            new_allowance = int(float(new_allowance))
+            if new_allowance < 0:
+                return False, "Allowance must be non-negative."
+        except (ValueError, TypeError):
+            return False, "Invalid allowance amount."
+        
+        cur = connect_db().cursor()
+        cur.execute('UPDATE users SET annual_balance = ? WHERE id = ?', (new_allowance, child_id))
+        return True, f"Allowance updated successfully!"
+
+    def change_child_password(self, child_id, new_password, confirm_password):
+        """Change a child's password."""
+        if child_id not in self.children:
+            return False, "Child not found."
+        
+        if new_password != confirm_password:
+            return False, "New passwords do not match."
+        
+        new_hash = generate_password_hash(new_password, method='pbkdf2:sha256', salt_length=16)
+        cur = connect_db().cursor()
+        cur.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_hash, child_id))
+        return True, "Child password changed successfully!"
+
 ####################### Chart setup #######################
 def create_half_donut_chart(title, spent_amount, total=300):
     remaining = total - spent_amount
@@ -265,6 +337,11 @@ def create_half_donut_chart(title, spent_amount, total=300):
 def index():
     charts = []
     transactions = []
+    children_status = []
+    bonus_threshold = 50
+
+    child_balance = 0
+    child_bonus_on_track = False
 
     if session.get('logged_in', False):
         if request.method == 'POST':
@@ -301,7 +378,14 @@ def index():
             if session.get('children_name'):
                 for idx, child_name in enumerate(session.get('children_name', [])):
                     spent = session.get('children_spent', [0] * len(session['children_name']))[idx] if idx < len(session.get('children_spent', [])) else 0
+                    balance = session.get('children_balances', [0] * len(session['children_name']))[idx] if idx < len(session.get('children_balances', [])) else 0
                     charts.append(create_half_donut_chart(child_name, spent))
+                    children_status.append({
+                        'id': session['children'][idx],
+                        'name': child_name,
+                        'balance': balance,
+                        'on_track': balance > bonus_threshold
+                    })
             else:
                 charts.append(create_half_donut_chart('No Child', 0))
         else:
@@ -315,12 +399,18 @@ def index():
                     charts.append(create_half_donut_chart(username, spent))
                     # Load this child's transactions to display
                     transactions = User.get_transactions(current_user.id)
+                    child_balance = balance
+                    child_bonus_on_track = balance > bonus_threshold
                 else:
                     charts.append(create_half_donut_chart('Child', 0))
+                    child_balance = 0
+                    child_bonus_on_track = False
             else:
                 charts.append(create_half_donut_chart('Child', 0))
+                child_balance = 0
+                child_bonus_on_track = False
 
-    return render_template('index.html', charts=charts, transactions=transactions)
+    return render_template('index.html', charts=charts, transactions=transactions, children_status=children_status, child_balance=child_balance, child_bonus_on_track=child_bonus_on_track)
 
 @app.route('/sign_in', methods=['GET', 'POST'])
 def sign_in():
@@ -354,7 +444,14 @@ def add_child():
     if request.method == 'POST':
         parent = User.get_by_id(session.get('user_id'))
         if parent:
-            if parent.add_child(request.form.get('username'), request.form.get('password'), request.form.get('con-password')):
+            annual_balance_input = request.form.get('annual_balance', '300')
+            try:
+                annual_balance = int(float(annual_balance_input))
+                if annual_balance < 0:
+                    annual_balance = 300
+            except ValueError:
+                annual_balance = 300
+            if parent.add_child(request.form.get('username'), request.form.get('password'), request.form.get('con-password'), annual_balance=annual_balance):
                 return redirect(url_for('index'))
         else:
             flash('You must be signed in to add a child.', 'error')
@@ -393,7 +490,15 @@ def transactions(child_id):
     txs = User.get_transactions(child_id)
     child = User.get_by_id(child_id)
     child_name = child.username if child else 'Unknown'
-    return render_template('transactions.html', transactions=txs, child_id=child_id, child_name=child_name)
+    child_balance = 0
+    child_bonus_on_track = False
+    cur = connect_db().cursor()
+    cur.execute('SELECT balance FROM users WHERE id = ?', (child_id,))
+    balance_row = cur.fetchone()
+    if balance_row:
+        child_balance = balance_row[0]
+        child_bonus_on_track = child_balance > 50
+    return render_template('transactions.html', transactions=txs, child_id=child_id, child_name=child_name, child_balance=child_balance, child_bonus_on_track=child_bonus_on_track)
 
 
 @app.route('/reverse_transaction/<int:tx_id>/<int:child_id>', methods=['POST'])
@@ -434,6 +539,75 @@ def reverse_transaction(tx_id, child_id):
     else:
         flash('Child user not found.', 'error')
     return redirect(url_for('transactions', child_id=child_id))
+
+@app.route('/settings', methods=['GET'])
+def settings():
+    if not session.get('logged_in'):
+        flash('You must be signed in to access settings.', 'error')
+        return redirect(url_for('sign_in'))
+    
+    user = User.get_by_id(session.get('user_id'))
+    children_info = []
+    
+    if session.get('privilege') == 1:
+        # Parent account - fetch child info
+        cur = connect_db().cursor()
+        for child_id in user.children:
+            cur.execute('SELECT id, username, annual_balance FROM users WHERE id = ?', (child_id,))
+            child_data = cur.fetchone()
+            if child_data:
+                children_info.append({
+                    'id': child_data[0],
+                    'username': child_data[1],
+                    'annual_balance': child_data[2]
+                })
+    
+    return render_template('settings.html', user=user, children_info=children_info)
+
+@app.route('/update_settings', methods=['POST'])
+def update_settings():
+    if not session.get('logged_in'):
+        flash('You must be signed in.', 'error')
+        return redirect(url_for('sign_in'))
+    
+    user = User.get_by_id(session.get('user_id'))
+    
+    # Handle password change
+    if request.form.get('change_password'):
+        old_password = request.form.get('old_password', '')
+        new_password = request.form.get('new_password', '')
+        confirm_password = request.form.get('confirm_new_password', '')
+        
+        if old_password and new_password:
+            success, message = user.change_password(old_password, new_password, confirm_password)
+            flash(message, 'success' if success else 'error')
+    
+    # Handle child allowance updates (parent only)
+    if session.get('privilege') == 1 and request.form.get('update_allowance'):
+        child_id_str = request.form.get('child_id', '')
+        new_allowance = request.form.get('allowance', '')
+        
+        try:
+            child_id = int(child_id_str)
+            success, message = user.update_child_allowance(child_id, new_allowance)
+            flash(message, 'success' if success else 'error')
+        except ValueError:
+            flash('Invalid child or allowance.', 'error')
+    
+    # Handle child password change (parent only)
+    if session.get('privilege') == 1 and request.form.get('change_child_password'):
+        child_id_str = request.form.get('child_id_pwd', '')
+        new_password = request.form.get('child_new_password', '')
+        confirm_password = request.form.get('child_confirm_password', '')
+        
+        try:
+            child_id = int(child_id_str)
+            success, message = user.change_child_password(child_id, new_password, confirm_password)
+            flash(message, 'success' if success else 'error')
+        except ValueError:
+            flash('Invalid child.', 'error')
+    
+    return redirect(url_for('settings'))
 
 if __name__ == '__main__':
     app.run(debug=True)
