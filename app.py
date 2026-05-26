@@ -427,8 +427,8 @@ def reverse_transaction(tx_id, child_id):
             try:
                 idx = session['children'].index(child_id)
                 # amount is original tx amount; reversing should add it back to balance and subtract from spent
-                session['children_balances'][idx] = session['children_balances'][idx] + amount
-                session['children_spent'][idx] = session['children_spent'][idx] - amount
+                session['children_balances'][idx] += amount
+                session['children_spent'][idx] -= amount
             except Exception:
                 pass
     else:
