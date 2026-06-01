@@ -1,8 +1,11 @@
 ####################### Importing necessary libraries #######################
-from flask import Flask, render_template, request, redirect, url_for, g, session, flash
+from flask import Flask, render_template, request, redirect, url_for, g, session, flash, jsonify
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 import pygal
+from pygal.style import Style
+import base64
+import re
 from dotenv import load_dotenv
 import os
 import datetime
@@ -28,6 +31,8 @@ def create_db():
         "parent_id"	INTEGER,
         "balance"	INTEGER,
         "spent"	INTEGER,
+        "annual_balance" INTEGER,
+        "dark_mode" INTEGER DEFAULT 0,
         PRIMARY KEY("id" AUTOINCREMENT)
         )''')
     
@@ -41,11 +46,6 @@ def create_db():
         FOREIGN KEY("user_id") REFERENCES "users"("id")
     )''')
     conn.commit()
-    c.execute('PRAGMA table_info(users)')
-    existing_columns = [row[1] for row in c.fetchall()]
-    if 'annual_balance' not in existing_columns:
-        c.execute('ALTER TABLE users ADD COLUMN annual_balance INTEGER')
-        conn.commit()
     conn.close()
 
 create_db()
@@ -53,10 +53,10 @@ create_db()
 def should_reset_balances():
     now = datetime.datetime.now()
     # Reset yearly at midnight on January 1 (commented out for testing):
-    # if now.month == 1 and now.day == 1 and now.hour == 0 and now.minute == 0:
+    # if now.month == 1 and now.day == 1 and now.hour == 0 and now.minute == 0 and now.second < 5:  # Add a small window to ensure it only triggers once
     #     return True
     # Reset at lunch each day for testing purposes:
-    return now.hour == 12 and now.minute == 0
+    return now.hour == 12 and now.minute == 0 and now.second < 5  # Add a small window to ensure it only triggers once
 
 
 def reset_balances_if_due():
@@ -126,7 +126,8 @@ class User:
         cur = connect_db().cursor()
         print("User ID:", self.id)
         print("Password:", password)
-        cur.execute('SELECT password_hash FROM users WHERE id = ?', (self.id,))
+        # Also fetch stored dark_mode preference (0/1)
+        cur.execute('SELECT password_hash, dark_mode FROM users WHERE id = ?', (self.id,))
         result = cur.fetchone()
         print("Password Hash from DB:", result)
         print("Check Password Result:", check_password_hash(result[0], password) if result else "No result")
@@ -139,6 +140,11 @@ class User:
             session['children_name'] = []
             session['children_balances'] = []
             session['children_spent'] = []
+            # Load dark mode preference (treat None as off)
+            try:
+                session['dark_mode'] = bool(result[1])
+            except Exception:
+                session['dark_mode'] = False
             for child_id in self.children:
                 cur.execute('SELECT username, balance, spent FROM users WHERE id = ?', (child_id,))
                 child_result = cur.fetchone()
@@ -176,7 +182,7 @@ class User:
             cur.execute('SELECT email FROM users WHERE email = ?', (email,))
             e_result = cur.fetchone()
             print("email:", e_result)
-            if u_result == None and e_result == None:
+            if u_result is None and e_result is None:
                 hash = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
                 print("Password Hash:", hash)
                 cur.execute('INSERT INTO users (username, email, password_hash, privilege, children, parent_id) VALUES (?, ?, ?, ?, ?, ?)', (username, email, hash, 1, None, None))
@@ -195,6 +201,7 @@ class User:
         session.pop('children_name', None)
         session.pop('children_balances', None)
         session.pop('children_spent', None)
+        session.pop('dark_mode', None)
         session['logged_in'] = False
 
     def add_child(self, child_name, password, confirm_password, annual_balance=300):
@@ -299,7 +306,7 @@ class User:
         
         cur = connect_db().cursor()
         cur.execute('UPDATE users SET annual_balance = ? WHERE id = ?', (new_allowance, child_id))
-        return True, f"Allowance updated successfully!"
+        return True, "Allowance updated successfully!"
 
     def change_child_password(self, child_id, new_password, confirm_password):
         """Change a child's password."""
@@ -315,22 +322,51 @@ class User:
         return True, "Child password changed successfully!"
 
 ####################### Chart setup #######################
+
+class DataUriChart:
+    def __init__(self, data_uri):
+        self._data_uri = data_uri
+
+    def render_data_uri(self):
+        return self._data_uri
+
+
 def create_half_donut_chart(title, spent_amount, total=300):
     remaining = total - spent_amount
     if remaining < 0:
         remaining = 0
 
+    dark_mode = session.get('dark_mode', True)
+    style = Style(
+        background='transparent',
+        plot_background='transparent',
+        foreground='#e0e0e0' if dark_mode else '#111111',
+        foreground_strong='#ffffff' if dark_mode else '#000000',
+        foreground_subtle='#bbbbbb' if dark_mode else '#444444',
+        tooltip_font_size=16
+    )
+
     chart = pygal.Pie(
         inner_radius=0.5,
         half_pie=True,
-        style=pygal.style.Style(background='transparent'),
+        style=style,
         show_legend=False,
         margin=10
     )
     chart.title = title
     chart.add('Spent', spent_amount)
     chart.add('Remaining', remaining)
-    return chart
+
+    svg = chart.render(is_unicode=True)
+    chart_id_match = re.search(r'<svg[^>]*id="([^"]+)"', svg)
+    if chart_id_match:
+        chart_id = chart_id_match.group(1)
+        tooltip_color = '#ffffff' if dark_mode else '#111111'
+        override_css = f'#{chart_id} .tooltip text {{ fill: {tooltip_color}; }}'
+        svg = svg.replace('</style>', f'{override_css}</style>', 1)
+
+    data_uri = 'data:image/svg+xml;charset=utf-8;base64,' + base64.b64encode(svg.encode('utf-8')).decode('utf-8')
+    return DataUriChart(data_uri)
 
 ####################### Routes #######################
 @app.route('/', methods=['GET', 'POST'])
@@ -608,6 +644,36 @@ def update_settings():
             flash('Invalid child.', 'error')
     
     return redirect(url_for('settings'))
+
+
+@app.route('/set_dark_mode', methods=['POST'])
+def set_dark_mode():
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    data = None
+    try:
+        data = request.get_json(silent=True)
+    except Exception:
+        data = None
+
+    if not data:
+        # fallback to form
+        data = request.form
+
+    dark_val = data.get('dark') if isinstance(data, dict) else None
+    # Accept a few truthy representations
+    is_dark = str(dark_val).lower() in ('1', 'true', 'yes', 'on')
+
+    cur = connect_db().cursor()
+    try:
+        cur.execute('UPDATE users SET dark_mode = ? WHERE id = ?', (1 if is_dark else 0, session.get('user_id')))
+        flash('Appearance updated.', 'success')
+    except Exception:
+        return jsonify({'error': 'Failed to update preference'}), 500
+
+    session['dark_mode'] = bool(is_dark)
+    return jsonify({'dark_mode': session['dark_mode']})
 
 if __name__ == '__main__':
     app.run(debug=True)

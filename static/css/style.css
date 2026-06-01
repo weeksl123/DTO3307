@@ -3,7 +3,6 @@ html, body {
 	margin: 0;
 	padding: 0;
 	border: none;
-	background: #f1f1f0;
 	height: 100%;
 	width: 100%;
 	overflow-x: hidden;
@@ -76,26 +75,43 @@ nav a {
 /*****************Styles Signin/Signup pages*****************/
 
 #signin_form {
-	color: #62067c;
-	margin: auto;
+	color: var(--text-primary);
+	width: min(420px, 90%);
+	max-width: 420px;
+	margin: 50px auto;
+	padding: 24px;
+	background: var(--bg-secondary);
+	border: 1px solid var(--border-color);
+	border-radius: 12px;
+	box-sizing: border-box;
+}
+
+#signin_form label,
+#signin_form input,
+#signin_form button,
+#signin_form p {
+	width: 100%;
+	box-sizing: border-box;
 }
 
 input[type="text"], input[type="email"], input[type="password"], input[type="number"] {
 	width: 100%;
-	margin: auto;
-	margin-bottom: 20px;
+	margin: 0 0 20px 0;
 	padding: 12px;
-	border: 1px solid #ccc;
+	border: 1px solid var(--border-color);
 	border-radius: 3px;
+	background: var(--bg-primary);
+	color: var(--text-primary);
 }
 
-input[type="submit"] {
+input[type="submit"], #signin_form button {
 	width: 100%;
 	margin-bottom: 20px;
 	padding: 12px;
-	border: 1px solid #ccc;
+	border: 1px solid var(--border-color);
 	border-radius: 3px;
-	background-color: white;
+	background-color: var(--text-secondary);
+	color: #111;
 }
 
 #back-button {
@@ -138,6 +154,7 @@ input[type="submit"] {
 .chart embed {
 	width: 100%;
 	height: auto;
+	background: transparent !important;
 }
 
 #children {
@@ -274,15 +291,6 @@ input[type="submit"] {
 
 /*****************Dark Mode Styles*****************/
 :root {
-	--bg-primary: #f1f1f0;
-	--bg-secondary: #FFFFFF;
-	--text-primary: #333;
-	--text-secondary: #62067c;
-	--border-color: #eee;
-	--nav-bg: #333;
-}
-
-[data-theme="dark"] {
 	--bg-primary: #1e1e1e;
 	--bg-secondary: #2d2d2d;
 	--text-primary: #e0e0e0;
@@ -291,19 +299,56 @@ input[type="submit"] {
 	--nav-bg: #1a1a1a;
 }
 
-[data-theme="dark"] html,
-[data-theme="dark"] body {
+[data-theme="light"],
+html[data-theme="light"],
+body[data-theme="light"] {
+	--bg-primary: #f1f1f0;
+	--bg-secondary: #FFFFFF;
+	--text-primary: #333;
+	--text-secondary: #62067c;
+	--border-color: #eee;
+	--nav-bg: #333;
+}
+
+html[data-theme="dark"],
+body[data-theme="dark"],
+html:not([data-theme]),
+body:not([data-theme]) {
 	background: var(--bg-primary);
 	color: var(--text-primary);
 }
 
-[data-theme="dark"] main h1,
-[data-theme="dark"] main h2,
-[data-theme="dark"] main h3 {
+html[data-theme="light"],
+body[data-theme="light"] {
+	background: var(--bg-primary);
+	color: var(--text-primary);
+}
+
+html[data-theme="dark"] main,
+body[data-theme="dark"] main,
+html[data-theme="dark"] .dashboard,
+body[data-theme="dark"] .dashboard,
+html[data-theme="dark"] #charts,
+body[data-theme="dark"] #charts,
+html[data-theme="dark"] .chart,
+body[data-theme="dark"] .chart,
+html[data-theme="dark"] #children,
+body[data-theme="dark"] #children {
+	background-color: var(--bg-secondary);
+	border-color: var(--border-color);
+}
+
+html[data-theme="dark"] main h1,
+html[data-theme="dark"] main h2,
+html[data-theme="dark"] main h3,
+body[data-theme="dark"] main h1,
+body[data-theme="dark"] main h2,
+body[data-theme="dark"] main h3 {
 	color: var(--text-secondary);
 }
 
-[data-theme="dark"] nav {
+html[data-theme="dark"] nav,
+body[data-theme="dark"] nav {
 	background-color: var(--nav-bg);
 	border-color: var(--nav-bg);
 }
@@ -347,7 +392,56 @@ input[type="submit"] {
 }
 
 [data-theme="dark"] .chart embed {
-	filter: invert(0.9);
+	/* keep embed background transparent so it matches the surrounding card */
+	filter: none;
+}
+
+/* Ensure embedded SVGs/backgrounds are transparent where possible */
+.chart embed, .chart object, .chart iframe {
+	background: transparent !important;
+}
+
+/* Balance update form styling */
+#change-spent {
+	max-width: 700px;
+	margin: 20px auto;
+	padding: 18px;
+	background-color: var(--bg-secondary);
+	border: 2px solid var(--border-color);
+	border-radius: 8px;
+}
+
+#change-spent label {
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+#change-spent select,
+#change-spent input[type="number"],
+#change-spent textarea {
+	width: 100%;
+	padding: 10px;
+	margin-top: 6px;
+	margin-bottom: 12px;
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	background: var(--bg-primary);
+	color: var(--text-primary);
+	box-sizing: border-box;
+}
+
+#change-spent button {
+	background-color: #62067c;
+	color: white;
+	padding: 10px 18px;
+	border: none;
+	border-radius: 6px;
+	cursor: pointer;
+	font-weight: 700;
+}
+
+#change-spent button:hover {
+	background-color: #4a0560;
 }
 
 [data-theme="dark"] #change-spent {
@@ -379,4 +473,29 @@ input[type="submit"] {
 
 [data-theme="dark"] .settings-section label {
 	color: var(--text-primary);
+}
+
+/* Improve child name readability in dark mode */
+[data-theme="dark"] #children h3 {
+	color: var(--text-secondary);
+}
+
+/* Child links / buttons in the children list */
+#children h3 a.txLink {
+	color: var(--text-secondary);
+	margin-left: 8px;
+	font-weight: 600;
+	text-decoration: none;
+}
+
+#children .removeChildBtn {
+	background: transparent;
+	border: none;
+	color: var(--text-primary);
+	cursor: pointer;
+	padding: 0 6px;
+}
+
+[data-theme="dark"] #children .removeChildBtn {
+	color: var(--text-secondary);
 }

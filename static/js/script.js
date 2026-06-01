@@ -41,26 +41,50 @@ document.addEventListener('DOMContentLoaded', function(){
 
 // Dark Mode Toggle
 document.addEventListener('DOMContentLoaded', function() {
+  const htmlTheme = document.documentElement.getAttribute('data-theme');
+  const bodyTheme = document.body.getAttribute('data-theme');
+  const themeAttr = htmlTheme || bodyTheme;
+  const stored = localStorage.getItem('darkMode');
+  let isDarkMode;
+
+  if (themeAttr === 'light') {
+    isDarkMode = false;
+  } else if (themeAttr === 'dark') {
+    isDarkMode = true;
+  } else if (stored !== null) {
+    isDarkMode = stored === 'true';
+  } else {
+    isDarkMode = true;
+  }
+
+  function applyTheme(darkMode) {
+    const theme = darkMode ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-theme', theme);
+  }
+
+  applyTheme(isDarkMode);
+
   const darkModeToggle = document.getElementById('dark-mode-toggle');
-  
   if (darkModeToggle) {
-    // Check if dark mode was previously set
-    const isDarkMode = localStorage.getItem('darkMode') === 'true';
     darkModeToggle.checked = isDarkMode;
-    
-    if (isDarkMode) {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    }
-    
-    // Toggle dark mode
+
     darkModeToggle.addEventListener('change', function() {
-      if (this.checked) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        localStorage.setItem('darkMode', 'true');
-      } else {
-        document.documentElement.removeAttribute('data-theme');
-        localStorage.setItem('darkMode', 'false');
-      }
+      const enabled = this.checked;
+      applyTheme(enabled);
+      localStorage.setItem('darkMode', String(enabled));
+
+      // Try to persist preference server-side for logged-in users
+      fetch('/set_dark_mode', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ dark: enabled })
+      }).catch(function(err) {
+        console.debug('Failed to update server dark mode:', err);
+      });
     });
   }
 });

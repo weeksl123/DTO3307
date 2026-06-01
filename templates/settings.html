@@ -12,7 +12,7 @@
         <div class="settings-section">
             <h2>Appearance</h2>
             <label for="dark-mode-toggle">Dark Mode:</label>
-            <input type="checkbox" id="dark-mode-toggle" name="dark-mode">
+            <input type="checkbox" id="dark-mode-toggle" name="dark-mode" {% if session.get('dark_mode') %}checked{% endif %}>
             <p><small>Toggle dark mode on/off</small></p>
         </div>
 
