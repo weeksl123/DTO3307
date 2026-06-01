@@ -321,6 +321,72 @@ class User:
         cur.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_hash, child_id))
         return True, "Child password changed successfully!"
 
+####################### Family and child Classes #######################
+BONUS_THRESHOLD = 50
+
+class Child:
+    def __init__(self, id, username, balance, spent, annual_balance, parent_id):
+        self.id = id
+        self.username = username
+        self.balance = balance or 0
+        self.spent = spent or 0
+        self.annual_balance = annual_balance or 0
+        self.parent_id = parent_id
+
+    @property
+    def on_track(self):
+        return self.balance > BONUS_THRESHOLD
+
+    def update_balance(self, amount, description=None):
+        cur = connect_db().cursor()
+        cur.execute('UPDATE users SET balance = balance - ?, spent = spent + ? WHERE id = ?', (amount, amount, self.id))
+        cur.execute('INSERT INTO transactions (user_id, amount, description) VALUES (?, ?, ?)', (self.id, amount, description))
+        self.balance -= amount
+        self.spent += amount
+        flash('Balance updated successfully!', 'success')
+        return True
+
+    @staticmethod
+    def get_by_id(child_id):
+        cur = connect_db().cursor()
+        cur.execute('SELECT id, username, balance, spent, annual_balance, parent_id FROM users WHERE id = ?', (child_id,))
+        row = cur.fetchone()
+        return Child(*row) if row else None
+
+class Family:
+    def __init__(self, parent_user, children):
+        self.parent = parent_user
+        self.children = children or []
+
+    @classmethod
+    def load_for_parent(cls, parent_id):
+        parent_user = User.get_by_id(parent_id)
+        if not parent_user:
+            return None
+        children = []
+        for child_id in parent_user.children:
+            child = Child.get_by_id(child_id)
+            if child:
+                children.append(child)
+        return cls(parent_user, children)
+
+    def get_child(self, child_id):
+        return next((child for child in self.children if child.id == child_id), None)
+
+    def reload_children(self):
+        children = []
+        for child_id in self.parent.children:
+            child = Child.get_by_id(child_id)
+            if child:
+                children.append(child)
+        self.children = children
+
+    def update_session_data(self):
+        session['children'] = [child.id for child in self.children]
+        session['children_name'] = [child.username for child in self.children]
+        session['children_balances'] = [child.balance for child in self.children]
+        session['children_spent'] = [child.spent for child in self.children]
+
 ####################### Chart setup #######################
 
 class DataUriChart:
@@ -395,33 +461,30 @@ def index():
                 except ValueError:
                     flash('Invalid child selection.', 'error')
                 else:
-                    if 'children' in session and child_id in session['children']:
-                        child_index = session['children'].index(child_id)
-                        user = User.get_by_id(child_id)
-                        if user:
-                            user.update_balance(child_id, amount, description=description)
-                            session['children_balances'][child_index] -= amount
-                            session['children_spent'][child_index] += amount
-                            flash(f"Updated balance for {session['children_name'][child_index]} by ${amount}.", 'success')
-                        else:
-                            flash('Child not found.', 'error')
+                    family = Family.load_for_parent(session.get('user_id')) if session.get('privilege') == 1 else None
+                    child = family.get_child(child_id) if family else None
+                    if child:
+                        child.update_balance(amount, description=description)
+                        family.reload_children()
+                        family.update_session_data()
+                        flash(f"Updated balance for {child.username} by ${amount}.", 'success')
                     else:
-                        flash('Child not found in session.', 'error')
+                        flash('Child not found.', 'error')
             else:
                 flash('Please select a child and enter a valid amount.', 'error')
 
         if session.get('privilege') == 1:
-            if session.get('children_name'):
-                for idx, child_name in enumerate(session.get('children_name', [])):
-                    spent = session.get('children_spent', [0] * len(session['children_name']))[idx] if idx < len(session.get('children_spent', [])) else 0
-                    balance = session.get('children_balances', [0] * len(session['children_name']))[idx] if idx < len(session.get('children_balances', [])) else 0
-                    charts.append(create_half_donut_chart(child_name, spent))
+            family = Family.load_for_parent(session.get('user_id'))
+            if family and family.children:
+                for child in family.children:
+                    charts.append(create_half_donut_chart(child.username, child.spent))
                     children_status.append({
-                        'id': session['children'][idx],
-                        'name': child_name,
-                        'balance': balance,
-                        'on_track': balance > bonus_threshold
+                        'id': child.id,
+                        'name': child.username,
+                        'balance': child.balance,
+                        'on_track': child.on_track
                     })
+                family.update_session_data()
             else:
                 charts.append(create_half_donut_chart('No Child', 0))
         else:
@@ -498,6 +561,9 @@ def remove_child(child_id):
     parent = User.get_by_id(session.get('user_id'))
     if parent:
         parent.remove_child(child_id)
+        family = Family.load_for_parent(parent.id)
+        if family:
+            family.update_session_data()
     else:
         flash('You must be signed in to remove a child.', 'error')
     return redirect(url_for('index'))
@@ -524,16 +590,10 @@ def transactions(child_id):
         return redirect(url_for('index'))
 
     txs = User.get_transactions(child_id)
-    child = User.get_by_id(child_id)
+    child = Child.get_by_id(child_id)
     child_name = child.username if child else 'Unknown'
-    child_balance = 0
-    child_bonus_on_track = False
-    cur = connect_db().cursor()
-    cur.execute('SELECT balance FROM users WHERE id = ?', (child_id,))
-    balance_row = cur.fetchone()
-    if balance_row:
-        child_balance = balance_row[0]
-        child_bonus_on_track = child_balance > 50
+    child_balance = child.balance if child else 0
+    child_bonus_on_track = child.on_track if child else False
     return render_template('transactions.html', transactions=txs, child_id=child_id, child_name=child_name, child_balance=child_balance, child_bonus_on_track=child_bonus_on_track)
 
 
@@ -586,17 +646,9 @@ def settings():
     children_info = []
     
     if session.get('privilege') == 1:
-        # Parent account - fetch child info
-        cur = connect_db().cursor()
-        for child_id in user.children:
-            cur.execute('SELECT id, username, annual_balance FROM users WHERE id = ?', (child_id,))
-            child_data = cur.fetchone()
-            if child_data:
-                children_info.append({
-                    'id': child_data[0],
-                    'username': child_data[1],
-                    'annual_balance': child_data[2]
-                })
+        family = Family.load_for_parent(session.get('user_id'))
+        if family:
+            children_info = family.children
     
     return render_template('settings.html', user=user, children_info=children_info)
 
