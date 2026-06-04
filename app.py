@@ -338,6 +338,9 @@ class Child:
         return self.balance > BONUS_THRESHOLD
 
     def update_balance(self, amount, description=None):
+        if amount > self.balance:
+            flash('Cannot spend more than the remaining allowance.', 'error')
+            return False
         cur = connect_db().cursor()
         cur.execute('UPDATE users SET balance = balance - ?, spent = spent + ? WHERE id = ?', (amount, amount, self.id))
         cur.execute('INSERT INTO transactions (user_id, amount, description) VALUES (?, ?, ?)', (self.id, amount, description))
@@ -464,10 +467,12 @@ def index():
                     family = Family.load_for_parent(session.get('user_id')) if session.get('privilege') == 1 else None
                     child = family.get_child(child_id) if family else None
                     if child:
-                        child.update_balance(amount, description=description)
-                        family.reload_children()
-                        family.update_session_data()
-                        flash(f"Updated balance for {child.username} by ${amount}.", 'success')
+                        if child.update_balance(amount, description=description):
+                            family.reload_children()
+                            family.update_session_data()
+                        else:
+                            # An error flash is already set by the child update method
+                            pass
                     else:
                         flash('Child not found.', 'error')
             else:

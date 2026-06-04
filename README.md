@@ -1,18 +1,165 @@
-# DTO3307
+# DTO3307 Documentation
 
-## Database Setup
+## Overview
 
-The database name is entirely controlled by the 'DATABASE' variable. To change the name of the database, go to [line 15 in app.py](./app.py#L15) prior to running the program for the first time. If you do change it after running the project for the first time then you will have multiple database files and possibly be confused as an account you made with the old database is no longer available after changing the database name.
+My project for DTO3307 is a Flask web application for managing parent and child accounts with budget tracking and transaction history.
 
-## Flask Secret Key
+- Parents can create child accounts, update child balances, and reverse transactions.
+- Children can sign in, view their own spending chart, and see transaction history.
+- The app stores users and transactions in a local SQLite database.
 
-Flask uses a secret key for security, you will need to create a ".env" file and place this line inside:
-``` env
-SECRET_KEY = '(Replace this text and the brackets with your secret key)'
+## Requirements
+
+- Python 3.8+
+- Flask
+- Werkzeug
+- pygal
+- python-dotenv
+
+## Installation
+
+1. Clone the repository:
+
+```bash
+git clone <repository-url>
+cd DTO3307
 ```
 
-To generate a secret key you can run this command in your terminal:
-``` Bash
-python -c 'import secrets; print(secrets.token_hex(32))'
+2. Create a virtual environment:
+
+```bash
+python -m venv venv
 ```
-The "secrets" module is designed to generate random and secure strings for passwords and security tokens.
+
+3. Activate the environment:
+
+- PowerShell:
+  ```powershell
+  .\venv\Scripts\Activate.ps1
+  ```
+- Command Prompt:
+  ```cmd
+  .\venv\Scripts\activate
+  ```
+
+4. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Environment Configuration
+
+Create a `.env` file in the project root containing:
+
+```env
+SECRET_KEY=your-secure-secret-key
+```
+
+Generate a secure secret key with:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+## Database
+
+- The database file is created automatically when `app.py` runs for the first time.
+- Default database path: `./test.db`
+- To change it before first run, update the `DATABASE` constant in `app.py`.
+
+## Running the Application
+
+Start the app with:
+
+```bash
+python app.py
+```
+
+Then open `http://127.0.0.1:5000/` in your browser.
+
+## Project Structure
+
+- `app.py` - Flask application, routes, database setup, and core logic
+- `templates/` - HTML templates used by Flask
+- `static/css/style.css` - application styling
+- `static/js/script.js` - front-end JavaScript
+- `.env` - environment variables (should not be committed)
+- `test.db` - SQLite database generated at runtime
+
+## Application Features
+
+- Parent registration and login
+- Child account creation and management
+- Balance updates and spending tracking
+- Transaction logging and reversal
+- Child-specific transaction history
+- Spending charts rendered with pygal
+
+## Important Routes
+
+- `/` - dashboard and child balance update form
+- `/sign_in` - sign-in page
+- `/sign_up` - parent registration page
+- `/sign_out` - log out
+- `/add_child` - create a new child account
+- `/remove_child/<int:child_id>` - delete a child account
+- `/transactions/<int:child_id>` - view child transaction history
+- `/reverse_transaction/<int:tx_id>/<int:child_id>` - reverse a transaction
+
+## Database Schema
+
+### `users`
+
+Columns:
+
+- `id` INTEGER PRIMARY KEY AUTOINCREMENT
+- `username` TEXT NOT NULL
+- `email` TEXT NOT NULL
+- `password_hash` TEXT NOT NULL
+- `privilege` INTEGER NOT NULL
+- `children` TEXT
+- `parent_id` INTEGER
+- `balance` INTEGER
+- `spent` INTEGER
+- `annual_balance` INTEGER
+- `dark_mode` INTEGER DEFAULT 0
+
+Notes:
+
+- Parent accounts store child IDs as a comma-separated string in `children`.
+- Child accounts use `parent_id` to link to the parent.
+- Child accounts store balance and spent amounts.
+
+### `transactions`
+
+Columns:
+
+- `id` INTEGER PRIMARY KEY AUTOINCREMENT
+- `user_id` INTEGER NOT NULL
+- `amount` INTEGER NOT NULL
+- `description` TEXT
+- `timestamp` DATETIME DEFAULT CURRENT_TIMESTAMP
+
+Notes:
+
+- Transactions are associated with a child account by `user_id`.
+- Reverse operations are stored as new transactions with negative amounts.
+
+## Notes
+
+- `sqlite3`, `os`, `re`, `base64`, and `datetime` are part of Python’s standard library.
+- Keep `.env` private and do not commit it.
+- This documentation is based on the current `app.py` implementation.
+
+
+## For Assessor
+
+### Previous Flask Experience
+
+- [91906 - Github](https://github.com/weeksl123/91906)
+
+### Tutorials
+
+- [Learn Flask for Python - Full Tutorial](https://www.youtube.com/watch?v=Z1RJmh_OqeA)
+- I also spent many hours learning through trial and error
