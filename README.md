@@ -21,17 +21,17 @@ My project for DTO3307 is a Flask web application for managing parent and child 
 1. Clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/weeksl123/DTO3307.git
 cd DTO3307
 ```
 
-2. Create a virtual environment:
+2. Create a virtual environment (Optional):
 
 ```bash
 python -m venv venv
 ```
 
-3. Activate the environment:
+3. Activate the environment (Only necessary if you did step 2):
 
 - PowerShell:
   ```powershell
