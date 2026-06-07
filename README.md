@@ -163,3 +163,4 @@ Notes:
 
 - [Learn Flask for Python - Full Tutorial](https://www.youtube.com/watch?v=Z1RJmh_OqeA)
 - I also spent many hours learning through trial and error
+- Plus many little google searches on how to do certain things here and there
