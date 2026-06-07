@@ -32,6 +32,7 @@ def create_db():
         "balance"	INTEGER,
         "spent"	INTEGER,
         "annual_balance" INTEGER,
+        "bonus_threshold" INTEGER DEFAULT 50,
         "dark_mode" INTEGER DEFAULT 0,
         PRIMARY KEY("id" AUTOINCREMENT)
         )''')
@@ -45,6 +46,7 @@ def create_db():
         PRIMARY KEY("id" AUTOINCREMENT),
         FOREIGN KEY("user_id") REFERENCES "users"("id")
     )''')
+
     conn.commit()
     conn.close()
 
@@ -73,10 +75,8 @@ def before_request():
 
 def connect_db():
     db = getattr(g, '_database', None)
-    print("Database connection:", db)
     if db is None:
         db = g._database = sqlite3.connect(DATABASE)
-        print("New database connection established:", db)
     return db
 
 @app.teardown_appcontext
@@ -88,7 +88,7 @@ def close_db(exception):
 
 ####################### Classes #######################
 class User:
-    def __init__(self, id, email, username, privilege, children, parent_id):
+    def __init__(self, id, email, username, privilege, children, parent_id, bonus_threshold=50):
         self.id = id
         self.email = email
         if privilege == 1:
@@ -97,6 +97,7 @@ class User:
             self.parent_id = parent_id
         self.username = username
         self.privilege = privilege
+        self.bonus_threshold = bonus_threshold or 50
         self.children = []
         if children:
             self.children = [int(child_id) for child_id in children.split(',') if child_id]
@@ -107,7 +108,7 @@ class User:
     @staticmethod
     def get_by_username(username):
         cur = connect_db().cursor()
-        cur.execute('SELECT id, email, username, privilege, children, parent_id FROM users WHERE username = ?', (username,))
+        cur.execute('SELECT id, email, username, privilege, children, parent_id, bonus_threshold FROM users WHERE username = ?', (username,))
         result = cur.fetchone()
         if result:
             return User(*result)
@@ -116,7 +117,7 @@ class User:
     @staticmethod
     def get_by_id(user_id):
         cur = connect_db().cursor()
-        cur.execute('SELECT id, email, username, privilege, children, parent_id FROM users WHERE id = ?', (user_id,))
+        cur.execute('SELECT id, email, username, privilege, children, parent_id, bonus_threshold FROM users WHERE id = ?', (user_id,))
         result = cur.fetchone()
         if result:
             return User(*result)
@@ -124,13 +125,9 @@ class User:
 
     def sign_in(self, password):
         cur = connect_db().cursor()
-        print("User ID:", self.id)
-        print("Password:", password)
-        # Also fetch stored dark_mode preference (0/1)
-        cur.execute('SELECT password_hash, dark_mode FROM users WHERE id = ?', (self.id,))
+        # Also fetch stored dark_mode preference (0/1) and bonus threshold
+        cur.execute('SELECT password_hash, dark_mode, bonus_threshold FROM users WHERE id = ?', (self.id,))
         result = cur.fetchone()
-        print("Password Hash from DB:", result)
-        print("Check Password Result:", check_password_hash(result[0], password) if result else "No result")
         if result and check_password_hash(result[0], password):
             session['user_id'] = self.id
             session['username'] = self.username
@@ -145,6 +142,10 @@ class User:
                 session['dark_mode'] = bool(result[1])
             except Exception:
                 session['dark_mode'] = False
+            try:
+                session['bonus_threshold'] = int(result[2]) if result[2] is not None else BONUS_THRESHOLD
+            except Exception:
+                session['bonus_threshold'] = BONUS_THRESHOLD
             for child_id in self.children:
                 cur.execute('SELECT username, balance, spent FROM users WHERE id = ?', (child_id,))
                 child_result = cur.fetchone()
@@ -152,17 +153,6 @@ class User:
                 session['children_balances'].append(child_result[1] if child_result else 0)
                 session['children_spent'].append(child_result[2] if child_result else 0)
 
-            print("""
-                    Session Data:
-                    user_id: {}
-                    username: {}
-                    privilege: {}
-                    logged_in: {}
-                    children: {}
-                    children_name: {}
-                    children_balances: {}
-                    children_spent: {}
-                  """.format(session['user_id'], session['username'], session['privilege'], session['logged_in'], session['children'], session['children_name'], session['children_balances'], session['children_spent']))
             flash('Signed in successfully!', 'success')
             return True
         else: 
@@ -172,19 +162,14 @@ class User:
     @staticmethod
     def sign_up(username, email, password, confirm_password):
         cur = connect_db().cursor()
-        print("Password:", password)
-        print("Confirm Password:", confirm_password)
         if password == confirm_password:
             # Check if username already exists
             cur.execute('SELECT username FROM users WHERE username = ?', (username,))
             u_result = cur.fetchone()
-            print("user:", u_result)
             cur.execute('SELECT email FROM users WHERE email = ?', (email,))
             e_result = cur.fetchone()
-            print("email:", e_result)
             if u_result is None and e_result is None:
                 hash = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
-                print("Password Hash:", hash)
                 cur.execute('INSERT INTO users (username, email, password_hash, privilege, children, parent_id) VALUES (?, ?, ?, ?, ?, ?)', (username, email, hash, 1, None, None))
                 flash('Account created successfully! Please sign in.', 'success')
             else:
@@ -305,7 +290,21 @@ class User:
             return False, "Invalid allowance amount."
         
         cur = connect_db().cursor()
-        cur.execute('UPDATE users SET annual_balance = ? WHERE id = ?', (new_allowance, child_id))
+        cur.execute('SELECT spent FROM users WHERE id = ?', (child_id,))
+        spent_result = cur.fetchone()
+        if not spent_result:
+            return False, "Child not found."
+        spent = spent_result[0] or 0
+        new_balance = new_allowance - spent
+        cur.execute('UPDATE users SET annual_balance = ?, balance = ? WHERE id = ?', (new_allowance, new_balance, child_id))
+
+        # Keep session data consistent if this child is already loaded in session.
+        if 'children' in session and child_id in session.get('children', []):
+            try:
+                idx = session['children'].index(child_id)
+                session['children_balances'][idx] = new_balance
+            except Exception:
+                pass
         return True, "Allowance updated successfully!"
 
     def change_child_password(self, child_id, new_password, confirm_password):
@@ -449,6 +448,7 @@ def index():
     child_bonus_on_track = False
 
     if session.get('logged_in', False):
+        bonus_threshold = session.get('bonus_threshold', BONUS_THRESHOLD)
         if request.method == 'POST':
             selected_child = request.form.get('child')
             description = request.form.get('description')
@@ -482,12 +482,12 @@ def index():
             family = Family.load_for_parent(session.get('user_id'))
             if family and family.children:
                 for child in family.children:
-                    charts.append(create_half_donut_chart(child.username, child.spent))
+                    charts.append(create_half_donut_chart(child.username, child.spent, total=child.annual_balance))
                     children_status.append({
                         'id': child.id,
                         'name': child.username,
                         'balance': child.balance,
-                        'on_track': child.on_track
+                        'on_track': child.balance > bonus_threshold
                     })
                 family.update_session_data()
             else:
@@ -495,12 +495,14 @@ def index():
         else:
             current_user = User.get_by_id(session.get('user_id'))
             if current_user:
+                parent = User.get_by_id(current_user.parent_id) if current_user.parent_id else None
+                bonus_threshold = parent.bonus_threshold if parent else bonus_threshold
                 cur = connect_db().cursor()
-                cur.execute('SELECT balance, spent, username FROM users WHERE id = ?', (current_user.id,))
+                cur.execute('SELECT balance, spent, username, annual_balance FROM users WHERE id = ?', (current_user.id,))
                 result = cur.fetchone()
                 if result:
-                    balance, spent, username = result
-                    charts.append(create_half_donut_chart(username, spent))
+                    balance, spent, username, annual_balance = result
+                    charts.append(create_half_donut_chart(username, spent, total=annual_balance or 300))
                     # Load this child's transactions to display
                     transactions = User.get_transactions(current_user.id)
                     child_balance = balance
@@ -598,7 +600,15 @@ def transactions(child_id):
     child = Child.get_by_id(child_id)
     child_name = child.username if child else 'Unknown'
     child_balance = child.balance if child else 0
-    child_bonus_on_track = child.on_track if child else False
+    child_bonus_on_track = False
+    if child:
+        if session.get('privilege') == 1:
+            parent = User.get_by_id(session.get('user_id'))
+            bonus_threshold = parent.bonus_threshold if parent else BONUS_THRESHOLD
+        else:
+            parent = User.get_by_id(child.parent_id) if child.parent_id else None
+            bonus_threshold = parent.bonus_threshold if parent else BONUS_THRESHOLD
+        child_bonus_on_track = child.balance > bonus_threshold
     return render_template('transactions.html', transactions=txs, child_id=child_id, child_name=child_name, child_balance=child_balance, child_bonus_on_track=child_bonus_on_track)
 
 
@@ -615,7 +625,11 @@ def reverse_transaction(tx_id, child_id):
     if not tx or tx[1] != child_id:
         flash('Transaction not found.', 'error')
         return redirect(url_for('transactions', child_id=child_id))
-    # Prevent double reversal by checking for a prior reversal with the same marker
+    # Prevent reversing a reversal transaction and double reversal of the same original transaction
+    if tx[3] and tx[3].startswith('Reversal of tx '):
+        flash('Cannot reverse a reversal transaction.', 'error')
+        return redirect(url_for('transactions', child_id=child_id))
+
     reversal_description = f"Reversal of tx {tx_id}: {tx[3]}"
     cur = connect_db().cursor()
     cur.execute('SELECT id FROM transactions WHERE description = ? AND user_id = ?', (reversal_description, child_id))
@@ -649,13 +663,15 @@ def settings():
     
     user = User.get_by_id(session.get('user_id'))
     children_info = []
+    bonus_threshold = session.get('bonus_threshold', BONUS_THRESHOLD)
     
     if session.get('privilege') == 1:
         family = Family.load_for_parent(session.get('user_id'))
         if family:
             children_info = family.children
+            bonus_threshold = user.bonus_threshold
     
-    return render_template('settings.html', user=user, children_info=children_info)
+    return render_template('settings.html', user=user, children_info=children_info, bonus_threshold=bonus_threshold)
 
 @app.route('/update_settings', methods=['POST'])
 def update_settings():
@@ -699,7 +715,21 @@ def update_settings():
             flash(message, 'success' if success else 'error')
         except ValueError:
             flash('Invalid child.', 'error')
-    
+
+    # Handle bonus threshold update (parent only)
+    if session.get('privilege') == 1 and request.form.get('update_bonus_threshold'):
+        new_threshold_str = request.form.get('bonus_threshold', '')
+        try:
+            new_threshold = int(float(new_threshold_str))
+            if new_threshold < 0:
+                raise ValueError
+            cur = connect_db().cursor()
+            cur.execute('UPDATE users SET bonus_threshold = ? WHERE id = ?', (new_threshold, user.id))
+            session['bonus_threshold'] = new_threshold
+            flash('Bonus threshold updated successfully.', 'success')
+        except ValueError:
+            flash('Invalid bonus threshold.', 'error')
+
     return redirect(url_for('settings'))
 
 

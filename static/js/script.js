@@ -28,13 +28,22 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 
   const flashes = document.querySelectorAll('.flash');
-  if (!flashes.length) return;
-  setTimeout(function () {
-    flashes.forEach(function (f) { f.classList.add('hide'); });
-  }, 4000);
-  flashes.forEach(function (f) {
-    f.addEventListener('transitionend', function () {
-      if (f.classList.contains('hide') && f.parentNode) f.parentNode.removeChild(f);
+  if (flashes.length) {
+    setTimeout(function () {
+      flashes.forEach(function (f) { f.classList.add('hide'); });
+    }, 4000);
+    flashes.forEach(function (f) {
+      f.addEventListener('transitionend', function () {
+        if (f.classList.contains('hide') && f.parentNode) f.parentNode.removeChild(f);
+      });
+    });
+  }
+
+  document.querySelectorAll('.remove-child-form').forEach(function (form) {
+    form.addEventListener('submit', function (event) {
+      if (!confirm('Are you sure you want to remove this child? This action cannot be undone.')) {
+        event.preventDefault();
+      }
     });
   });
 });
