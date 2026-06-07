@@ -2,7 +2,7 @@
 
 ## Overview
 
-My project for DTO3307 is a Flask web application for managing parent and child accounts with budget tracking and transaction history.
+My project for DTO3307 is a Flask web application managed by parent accounts for budget tracking and transaction history.
 
 - Parents can create child accounts, update child balances, and reverse transactions.
 - Children can sign in, view their own spending chart, and see transaction history.
