@@ -76,7 +76,7 @@ Start the app with:
 python app.py
 ```
 
-Then open `http://127.0.0.1:5000/` in your browser. (Or if running in Visual Studio Code, hold control and click on the link to `http://127.0.0.1:5000` in the terminal when the program starts)
+Then open `http://127.0.0.1:5000/` in your browser. (Or if running in Visual Studio Code, hold control and click on the link to `http://127.0.0.1:5000/` in the terminal when the program starts)
 
 ## Project Structure
 
