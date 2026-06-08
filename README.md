@@ -76,7 +76,7 @@ Start the app with:
 python app.py
 ```
 
-Then open `http://127.0.0.1:5000/` in your browser.
+Then open `http://127.0.0.1:5000/` in your browser. (Or if running in Visual Studio Code, hold control and click on the link to `http://127.0.0.1:5000` in the terminal when the program starts)
 
 ## Project Structure
 
@@ -164,3 +164,7 @@ Notes:
 - [Learn Flask for Python - Full Tutorial](https://www.youtube.com/watch?v=Z1RJmh_OqeA)
 - I also spent many hours learning through trial and error
 - Plus many little google searches on how to do certain things here and there
+
+### Testing
+
+- For my documentation on the testing done to this project check out the [Testing Documentation](./Testing.md)

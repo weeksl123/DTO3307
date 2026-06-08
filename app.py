@@ -6,9 +6,26 @@ import pygal
 from pygal.style import Style
 import base64
 import re
+import socket
 from dotenv import load_dotenv
 import os
 import datetime
+
+EMAIL_REGEX = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+def domain_exists(domain):
+    try:
+        socket.getaddrinfo(domain, None)
+        return True
+    except OSError:
+        return False
+
+def is_valid_email(email):
+    if not email or not EMAIL_REGEX.match(email):
+        return False
+
+    domain = email.split('@')[-1].strip()
+    return domain_exists(domain)
 
 ####################### Flask app setup #######################
 app = Flask(__name__)
@@ -162,6 +179,10 @@ class User:
     @staticmethod
     def sign_up(username, email, password, confirm_password):
         cur = connect_db().cursor()
+        if not is_valid_email(email):
+            flash('Please enter a valid email address.', 'error')
+            return False
+
         if password == confirm_password:
             # Check if username already exists
             cur.execute('SELECT username FROM users WHERE username = ?', (username,))
@@ -172,10 +193,12 @@ class User:
                 hash = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
                 cur.execute('INSERT INTO users (username, email, password_hash, privilege, children, parent_id) VALUES (?, ?, ?, ?, ?, ?)', (username, email, hash, 1, None, None))
                 flash('Account created successfully! Please sign in.', 'success')
+                return True
             else:
                 flash('Username or email already exists.', 'error')
         else:
             flash('Passwords do not match.', 'error')
+        return False
 
     @staticmethod
     def sign_out():
@@ -535,8 +558,9 @@ def sign_up():
         email = request.form.get('email')
         password = request.form.get('password')
         confirm_password = request.form.get('con-password')
-        User.sign_up(username=username, email=email, password=password, confirm_password=confirm_password)
-        return redirect(url_for('sign_in'))
+        success = User.sign_up(username=username, email=email, password=password, confirm_password=confirm_password)
+        if success:
+            return redirect(url_for('sign_in'))
     return render_template('sign_up.html')
 
 @app.route('/sign_out')
