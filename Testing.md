@@ -28,4 +28,4 @@
 
 ## Testing Video
 
-- Watch the [Testing Video Here](./DTO3307%20Testing%20Video.mp4) (Do not mind the screen going black when changing pages, I am unsure why this was happening)
+- Watch the [Testing Video Here](./DTO3307%20Testing%20Video.mp4) (Do not mind the screen going black when changing pages, I am unsure why this was happening but it is a problem with OBS not the website)
