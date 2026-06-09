@@ -124,6 +124,7 @@ Columns:
 - `spent` INTEGER
 - `annual_balance` INTEGER
 - `dark_mode` INTEGER DEFAULT 0
+- `bonus_threshold` INTEGER DEFAULT 50
 
 Notes:
 
